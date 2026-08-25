@@ -14,6 +14,8 @@ import com.example.booking_engine.config.RabbitMQConfig;
 import com.example.booking_engine.model.Inventory;
 import com.example.booking_engine.repository.ProductRepository;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,6 +32,9 @@ public class ProductController {
     @Autowired
     private RabbitTemplate rabbitTemplate;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @GetMapping
     public List<Inventory> getAllProducts() {
         return productRepository.findAll();
@@ -45,8 +50,11 @@ public class ProductController {
 
     @PostMapping("/place-order/{id}/{userId}/{orderQuantity}")
     public String placeOrder(@PathVariable Long id, @PathVariable Long userId, @PathVariable int orderQuantity) {
+
+        meterRegistry.counter("booking.order_requests.total", "status", "received").increment();
         String message = "{\"productid\":\"" + id + "\",\"userid\":\"" + userId + "\",\"quantity\":\"" + orderQuantity + "\"}";
         rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, message);
+        meterRegistry.counter("booking.orders.queued.total", "productId", String.valueOf(id)).increment();
         return "Order placed successfully";
     }
     
